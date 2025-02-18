@@ -36,6 +36,8 @@ pub struct Take<'info> {
     pub maker_mint_b_ata: InterfaceAccount<'info, TokenAccount>,
     
     #[account(
+        has_one = mint_b,
+        has_one = mint_a,
         seeds = [b"escrow", escrow.maker.as_ref(), escrow.seed.to_le_bytes().as_ref()],
         bump
     )]
