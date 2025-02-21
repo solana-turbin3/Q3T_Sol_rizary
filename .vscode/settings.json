@@ -2,5 +2,10 @@
     "rust-analyzer.cargo.features": [
         "default",
         "cpi"
+    ],
+    "rust-analyzer.linkedProjects": [
+        "marketplace/Cargo.toml",
+        "escrow/Cargo.toml",
+        "vault/Cargo.toml"
     ]
 }
