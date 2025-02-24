@@ -22,7 +22,8 @@ pub struct List<'info> {
     )]
     pub maker_ata: InterfaceAccount<'info, TokenAccount>,
     #[account(
-        mut,
+        init, 
+        payer = maker,
         associated_token::mint = maker_mint,
         associated_token::authority = listing,
     )]
@@ -51,13 +52,13 @@ pub struct List<'info> {
     pub metadata: Account<'info, MetadataAccount>,
     
     pub metadata_program: Program<'info, Metadata>,
-    
+    pub associated_token_program: Program<'info, AssociatedToken>,
     pub token_program: Interface<'info, TokenInterface>,
     pub system_program: Program<'info, System>,
 }
 
 impl<'info> List<'info> {
-    pub fn reate_listing(&mut self, price: u64, bumps: &ListBumps) -> Result<()> {
+    pub fn create_listing(&mut self, price: u64, bumps: &ListBumps) -> Result<()> {
         self.listing.set_inner(Listing {
             maker: self.maker.key(),
             mint: self.maker_mint.key(),
