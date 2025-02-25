@@ -6,6 +6,7 @@
     "rust-analyzer.linkedProjects": [
         "marketplace/Cargo.toml",
         "escrow/Cargo.toml",
-        "vault/Cargo.toml"
+        "vault/Cargo.toml",
+        "nft-staking/Cargo.toml"
     ]
 }
