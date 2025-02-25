@@ -7,6 +7,7 @@
         "marketplace/Cargo.toml",
         "escrow/Cargo.toml",
         "vault/Cargo.toml",
-        "nft-staking/Cargo.toml"
+        "nft-staking/Cargo.toml",
+        "amm/Cargo.toml"
     ]
 }
