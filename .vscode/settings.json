@@ -8,6 +8,7 @@
         "escrow/Cargo.toml",
         "vault/Cargo.toml",
         "nft-staking/Cargo.toml",
-        "amm/Cargo.toml"
+        "amm/Cargo.toml",
+        "udie/Cargo.toml"
     ]
 }
