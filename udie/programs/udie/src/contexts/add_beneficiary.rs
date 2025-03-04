@@ -60,7 +60,6 @@ impl<'info> AddBeneficiary<'info> {
             wallet: self.beneficiary_wallet.key(),
             relationship,
             share_percentage,
-            is_verified: false,
             has_withdrawn: false,
             inheritance_plan: self.inheritance_plan.key(),
             bump: bumps.beneficiary,

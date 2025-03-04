@@ -126,6 +126,13 @@ describe("udie", () => {
     // mint can still be generated if needed
     const mint = Keypair.generate();
 
+        
+    // Store accounts that we'll reuse across tests
+    let mintKeypair: Keypair;
+
+    let beneficiary: Keypair;  // Store beneficiary keypair
+    beneficiary = Keypair.generate();
+
     before(async () => {
         // Find PDAs
         [adminPda] = PublicKey.findProgramAddressSync(
@@ -186,11 +193,6 @@ describe("udie", () => {
             // Wait a bit before fetching transaction details
             await sleep(15000);
 
-            // Get transaction logs
-            // const txLogs = await connection.getTransaction(tx, {
-            //     maxSupportedTransactionVersion: 0
-            // });
-            // console.log("Transaction logs:", txLogs?.meta?.logMessages);
         } catch (error) {
             console.error("Error:", error);
             if (error.logs) {
@@ -198,6 +200,9 @@ describe("udie", () => {
             }
             throw error;
         }
+
+        // Initialize beneficiary here so it's available for all tests
+        beneficiary = Keypair.generate();
     });
 
     before(async () => {
@@ -210,6 +215,7 @@ describe("udie", () => {
 
         await connection.requestAirdrop(beneficiary.publicKey, 5 * LAMPORTS_PER_SOL);
         await sleep(500);
+
     });
 
     describe("Success Cases", () => {
@@ -320,14 +326,15 @@ describe("udie", () => {
 
         it("Add Asset", async () => {
             try {
+                // Create mint
+                mintKeypair = Keypair.generate();
+
                 const ownerProgram = new anchor.Program(
                     anchor.workspace.Udie.idl,
                     provider2,
                     anchor.workspace.Udie.coder
                 ) as Program<Udie>;
 
-                // 1. Create a new mint account
-                const mintKeypair = Keypair.generate();
                 const createMintAccountIx = SystemProgram.createAccount({
                     fromPubkey: owner.publicKey,
                     newAccountPubkey: mintKeypair.publicKey,
@@ -390,7 +397,7 @@ describe("udie", () => {
                     mintKeypair.publicKey,
                     ataAddress,
                     owner.publicKey,
-                    100
+                    5000000000
                 );
 
                 const latestBlockhash3 = await connection.getLatestBlockhash();
@@ -417,15 +424,23 @@ describe("udie", () => {
                     ownerProgram.programId
                 );
 
-                // 6. Add asset to inheritance plan
+                // Get vault (which is an ATA)
+                const vault = await getAssociatedTokenAddress(
+                    mintKeypair.publicKey,
+                    asset,
+                    true // allowOwnerOffCurve
+                );
+
+                // Add asset to inheritance plan
                 await ownerProgram.methods
-                    .addAsset(new anchor.BN(100))
+                    .addAsset(new anchor.BN(1000000000))
                     .accounts({
                         owner: owner.publicKey,
                         inheritancePlan: inheritance_plan,
                         asset: asset,
                         mint: mintKeypair.publicKey,
                         ownerAta: ataAddress,
+                        vault: vault,
                         systemProgram: SystemProgram.programId,
                         tokenProgram: TOKEN_PROGRAM_ID,
                         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -433,10 +448,34 @@ describe("udie", () => {
                     .signers([owner])
                     .rpc();
 
+                await sleep(15000);
+
+                // Verify asset was created correctly
+                const assetAccount = await program.account.asset.fetch(asset);
+
+                // Verify vault balance
+                const vaultBalance = await connection.getTokenAccountBalance(vault);
+
+                // Assertions
+                assert.equal(assetAccount.mint.toBase58(), mintKeypair.publicKey.toBase58());
+                assert.equal(assetAccount.amount.toString(), "1000000000");
+                assert.equal(assetAccount.inheritancePlan.toBase58(), inheritance_plan.toBase58());
+                assert.equal(assetAccount.vault.toBase58(), vault.toBase58());
+                assert.equal(vaultBalance.value.amount, "1000000000");
+
+                // // Store all accounts for next tests
+                // console.log("Storing accounts for next tests:");
+                // console.log("- Mint:", mintKeypair.publicKey.toBase58());
+                // console.log("- Inheritance Plan:", inheritance_plan.toBase58());
+                // console.log("- Asset:", asset.toBase58());
+                // console.log("- Vault:", vault.toBase58());
+                // console.log("- Beneficiary:", beneficiary.publicKey.toBase58());
+                // console.log("- Beneficiary Account:", beneficiary_account.toBase58());
+
             } catch (error) {
-                console.error("Error:", error);
+                console.error("Full error:", error);
                 if (error.logs) {
-                    console.error("Logs:", error.logs);
+                    console.log("Program logs:", error.logs);
                 }
                 throw error;
             }
@@ -472,7 +511,176 @@ describe("udie", () => {
             }
         });
 
-        
+        it("Withdraw Asset", async () => {
+            const sleep = async (ms: number) => new Promise(r => setTimeout(r, ms));
+
+            async function sendAndMonitorTransaction(
+                transaction: Transaction,
+                signer: Keypair,
+                label: string = "Transaction"
+            ) {
+                // Get fresh blockhash and lastValidBlockHeight
+                const blockhashResponse = await connection.getLatestBlockhash('confirmed');
+                // console.log(`${label} - Initial blockhash:`, blockhashResponse.blockhash);
+                // console.log(`${label} - Initial lastValidBlockHeight:`, blockhashResponse.lastValidBlockHeight);
+                
+                let currentBlockHeight = await connection.getBlockHeight();
+                // console.log(`${label} - Current blockHeight:`, currentBlockHeight);
+
+                // Set a more conservative lastValidBlockHeight
+                const lastValidBlockHeight = blockhashResponse.lastValidBlockHeight - 150;
+                // console.log(`${label} - Adjusted lastValidBlockHeight:`, lastValidBlockHeight);
+
+                // Update transaction with new blockhash
+                transaction.recentBlockhash = blockhashResponse.blockhash;
+                transaction.feePayer = signer.publicKey;
+                transaction.lastValidBlockHeight = lastValidBlockHeight;
+                transaction.sign(signer);
+                const rawTransaction = transaction.serialize();
+
+                let signature: string | null = null;
+                let retryCount = 0;
+                const maxRetries = 10;
+
+                while (currentBlockHeight < lastValidBlockHeight && retryCount < maxRetries) {
+                    try {
+                        if (!signature) {
+                            // Only send the transaction if we don't have a signature yet
+                            signature = await connection.sendRawTransaction(rawTransaction, {
+                                skipPreflight: false,
+                                preflightCommitment: 'confirmed'
+                            });
+                            // console.log(`${label} - Transaction sent with signature:`, signature);
+                        }
+
+                        // Check transaction status
+                        const status = await connection.getSignatureStatus(signature);
+                        // console.log(`${label} - Transaction status:`, status.value?.confirmationStatus);
+
+                        if (status.value?.confirmationStatus === 'confirmed' || 
+                            status.value?.confirmationStatus === 'finalized') {
+                            // console.log(`${label} - Transaction confirmed!`);
+                            return signature;
+                        }
+
+                    } catch (e) {
+                        console.log(`${label} - Retry ${retryCount + 1}/${maxRetries} failed:`, e.message);
+                    }
+
+                    retryCount++;
+                    await sleep(1000);
+                    currentBlockHeight = await connection.getBlockHeight();
+                    // console.log(`${label} - Current blockHeight: ${currentBlockHeight}, Target: ${lastValidBlockHeight}`);
+                }
+
+                throw new Error(`${label} - Failed after ${retryCount} retries`);
+            }
+
+            const vault = await getAssociatedTokenAddress(
+                mintKeypair.publicKey,
+                asset,
+                true
+            );
+            
+            try {
+                // Create owner program instance first
+                const ownerProgram = new anchor.Program(
+                    anchor.workspace.Udie.idl,
+                    provider2,
+                    anchor.workspace.Udie.coder
+                ) as Program<Udie>;
+
+                // Derive beneficiary account PDA with ownerProgram.programId
+                [beneficiary_account] = PublicKey.findProgramAddressSync(
+                    [
+                        Buffer.from("beneficiary"),
+                        inheritance_plan.toBuffer(),
+                        beneficiary.publicKey.toBuffer()
+                    ],
+                    ownerProgram.programId  // Use ownerProgram.programId instead of program.programId
+                );
+
+                // Get vault (which is an ATA)
+                const vault = await getAssociatedTokenAddress(
+                    mintKeypair.publicKey,
+                    asset,
+                    true // allowOwnerOffCurve
+                );
+                
+                // console.log("Using stored accounts:");
+                // console.log("- Mint:", mintKeypair.publicKey.toBase58());
+                // console.log("- Inheritance Plan:", inheritance_plan.toBase58());
+                // console.log("- Asset:", asset.toBase58());
+                // console.log("- Vault:", vault.toBase58());
+                // console.log("- Beneficiary:", beneficiary.publicKey.toBase58());
+                // console.log("- Derived Beneficiary Account:", beneficiary_account.toBase58());
+
+                
+                // Create beneficiary's ATA if it doesn't exist
+                const beneficiaryAta = await getAssociatedTokenAddress(
+                    mintKeypair.publicKey,
+                    beneficiary.publicKey
+                );
+
+                // Create ATA if it doesn't exist
+                if (!(await connection.getAccountInfo(beneficiaryAta))) {
+                    const createAtaTx = new Transaction().add(
+                        createAssociatedTokenAccountInstruction(
+                            beneficiary.publicKey,
+                            beneficiaryAta,
+                            beneficiary.publicKey,
+                            mintKeypair.publicKey
+                        )
+                    );
+                    
+                    await sendAndMonitorTransaction(createAtaTx, beneficiary, "Create ATA");
+                    await sleep(5000);
+                }
+
+                const withdrawIx = await program.methods
+                    .withdrawAsset()
+                    .accounts({
+                        beneficiary: beneficiary.publicKey,
+                        inheritancePlan: inheritance_plan,
+                        beneficiaryAccount: beneficiary_account,
+                        mint: mintKeypair.publicKey,
+                        asset: asset,
+                        vault: vault,
+                        beneficiaryAta: beneficiaryAta,
+                        tokenProgram: TOKEN_PROGRAM_ID,
+                        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+                        systemProgram: SystemProgram.programId,
+                    })
+                    .instruction();
+
+                const withdrawTx = new Transaction().add(withdrawIx);
+                
+                const txid = await sendAndMonitorTransaction(withdrawTx, beneficiary, "Withdraw");
+
+                // Add extra verification step
+                const confirmedTx = await connection.getTransaction(txid, {
+                    commitment: 'confirmed',
+                    maxSupportedTransactionVersion: 0
+                });
+
+                if (!confirmedTx) {
+                    throw new Error("Transaction not found after confirmation");
+                }
+
+                await sleep(15000);
+
+                // Verify withdrawal
+                const beneficiaryBalance = await connection.getTokenAccountBalance(beneficiaryAta);
+                assert.equal(beneficiaryBalance.value.amount, "500000000");
+
+            } catch (error) {
+                console.error("Final error:", error);
+                if (error.logs) {
+                    console.log("Program logs:", error.logs);
+                }
+                throw error;
+            }
+        });
     });
 
     describe("State Verification", () => {

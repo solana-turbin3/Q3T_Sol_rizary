@@ -34,7 +34,6 @@ pub struct WithdrawAsset<'info> {
             beneficiary.key().as_ref()
         ],
         bump = beneficiary_account.bump,
-        constraint = beneficiary_account.is_verified == true,
         constraint = !beneficiary_account.has_withdrawn,
         constraint = beneficiary_account.wallet == beneficiary.key()
     )]

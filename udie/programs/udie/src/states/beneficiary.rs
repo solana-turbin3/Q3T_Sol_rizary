@@ -7,7 +7,6 @@ pub struct Beneficiary {
     #[max_len(32)]
     pub relationship: String,    // max 32 chars
     pub share_percentage: u8,
-    pub is_verified: bool,
     pub has_withdrawn: bool,
     pub inheritance_plan: Pubkey,
     pub bump: u8,
