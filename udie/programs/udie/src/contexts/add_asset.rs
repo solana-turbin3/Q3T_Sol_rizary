@@ -3,6 +3,7 @@ use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface, transfer_c
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token_interface::TransferChecked;
 use crate::states::{InheritancePlan, Asset};
+use crate::errors::UdieError;
 
 #[derive(Accounts)]
 pub struct AddAsset<'info> {
@@ -13,9 +14,8 @@ pub struct AddAsset<'info> {
         mut,
         seeds = [b"inheritance_plan", owner.key().as_ref()],
         bump = inheritance_plan.bump,
-        constraint = inheritance_plan.owner == owner.key(),
-        constraint = inheritance_plan.is_active == true,
-        constraint = !inheritance_plan.death_verified
+        constraint = inheritance_plan.owner == owner.key() @UdieError::InvalidOwner,
+        constraint = inheritance_plan.is_active == true @UdieError::PlanLocked,
     )]
     pub inheritance_plan: Account<'info, InheritancePlan>,
     

@@ -21,8 +21,8 @@ pub struct WithdrawAsset<'info> {
             inheritance_plan.owner.as_ref()
         ],
         bump = inheritance_plan.bump,
-        constraint = inheritance_plan.is_active == true,
-        constraint = inheritance_plan.death_verified
+        constraint = inheritance_plan.is_active == true @UdieError::PlanLocked,
+        constraint = inheritance_plan.death_verified @UdieError::DeathNotVerified
     )]
     pub inheritance_plan: Account<'info, InheritancePlan>,
     
@@ -34,8 +34,8 @@ pub struct WithdrawAsset<'info> {
             beneficiary.key().as_ref()
         ],
         bump = beneficiary_account.bump,
-        constraint = !beneficiary_account.has_withdrawn,
-        constraint = beneficiary_account.wallet == beneficiary.key()
+        constraint = !beneficiary_account.has_withdrawn @UdieError::BeneficiaryWithdrawn,
+        constraint = beneficiary_account.wallet == beneficiary.key() @UdieError::InvalidBeneficiary
     )]
     pub beneficiary_account: Account<'info, Beneficiary>,
     

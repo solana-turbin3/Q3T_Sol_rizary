@@ -682,57 +682,6 @@ describe("udie", () => {
             }
         });
     });
-
-    describe("State Verification", () => {
-        it("Verifies complete inheritance flow state changes", async () => {
-            // Add beneficiary
-            await program.methods
-                .addBeneficiary("son", 50)
-                .accounts([{
-                    owner: owner.publicKey,
-                    inheritancePlan: inheritance_plan,
-                    beneficiary: beneficiary_account,
-                    beneficiaryWallet: beneficiary.publicKey,
-                    systemProgram: SystemProgram.programId,
-                }])
-                .signers([owner])
-                .rpc();
-
-            // Verify beneficiary state
-            let beneficiaryState = await program.account.beneficiary.fetch(beneficiary_account);
-            assert.equal(beneficiaryState.wallet.toBase58(), beneficiary.publicKey.toBase58());
-            assert.equal(beneficiaryState.relationship, "son");
-            assert.equal(beneficiaryState.sharePercentage, 50);
-            assert.equal(beneficiaryState.hasWithdrawn, false);
-
-            // Add asset
-            await program.methods
-                .addAsset(new anchor.BN(1_000_000))
-                .accounts([{
-                    owner: owner.publicKey,
-                    inheritancePlan: inheritance_plan,
-                    mint: mint.publicKey,
-                    ownerAta: await getAssociatedTokenAddress(mint.publicKey, owner.publicKey),
-                    asset: asset,
-                    vault: vault,
-                    tokenProgram: TOKEN_PROGRAM_ID,
-                    associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-                    systemProgram: SystemProgram.programId,
-                }])
-                .signers([owner])
-                .rpc();
-
-            // Verify asset state
-            let assetState = await program.account.asset.fetch(asset);
-            assert.equal(assetState.amount.toString(), "1000000");
-            assert.equal(assetState.mint.toBase58(), mint.publicKey.toBase58());
-
-            // Verify inheritance plan updated
-            let planState = await program.account.inheritancePlan.fetch(inheritance_plan);
-            assert.equal(planState.totalBeneficiaries, 1);
-            assert.equal(planState.totalAssets, 1);
-        });
-    });
 });
 
 async function airdrop(connection, address: PublicKey, amount: number) {

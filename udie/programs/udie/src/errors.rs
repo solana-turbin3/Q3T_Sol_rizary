@@ -5,6 +5,15 @@ pub enum UdieError {
     #[msg("Invalid Share Percentage")]
     InvalidSharePercentage,
     
+    #[msg("Invalid Owner")]
+    InvalidOwner,
+    
+    #[msg("Plan is Locked")]
+    PlanLocked,
+    
+    #[msg("Death Not Verified")]
+    DeathNotVerified,
+    
     #[msg("Total Share Exceeds 100%")]
     ShareExceeds100Percent,
     
@@ -20,12 +29,6 @@ pub enum UdieError {
     #[msg("Division by Zero")]
     DivisionByZero,
     
-    #[msg("Plan is Locked")]
-    PlanLocked,
-    
-    #[msg("Death Not Verified")]
-    DeathNotVerified,
-    
     #[msg("Safety Period Active")]
     SafetyPeriodActive,
     
@@ -34,4 +37,10 @@ pub enum UdieError {
     
     #[msg("Unauthorized")]
     Unauthorized,
+
+    #[msg("Beneficiary Withdrawn")]
+    BeneficiaryWithdrawn,
+
+    #[msg("Invalid Beneficiary")]
+    InvalidBeneficiary,
 }

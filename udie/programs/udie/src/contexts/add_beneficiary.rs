@@ -11,9 +11,9 @@ pub struct AddBeneficiary<'info> {
         mut,
         seeds = [b"inheritance_plan", owner.key().as_ref()],
         bump = inheritance_plan.bump,
-        constraint = inheritance_plan.owner == owner.key(),
-        constraint = inheritance_plan.is_active == true,
-        constraint = !inheritance_plan.death_verified
+        constraint = inheritance_plan.owner == owner.key() @UdieError::InvalidOwner,
+        constraint = inheritance_plan.is_active == true @UdieError::PlanLocked,
+        constraint = !inheritance_plan.death_verified @UdieError::DeathNotVerified
     )]
     pub inheritance_plan: Account<'info, InheritancePlan>,
     
